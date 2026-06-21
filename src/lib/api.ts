@@ -1,25 +1,29 @@
+import { auth } from "@clerk/nextjs/server";
 import { ApiError } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 const TOKEN = process.env.ABARA_INTERNAL_TOKEN!;
 
-// Server-side only: direct call to abara-api with internal token
-// Use this in Server Components and API routes ONLY
+// Server-side only: direct call to abara-api with internal token.
+// Use this in Server Components, Server Actions, and Route Handlers ONLY.
 export async function apiServer<T>(
   path: string,
-  options: RequestInit & { businessId?: string } = {},
+  options: RequestInit = {},
 ): Promise<T> {
-  const { businessId, ...fetchOptions } = options;
+  const { sessionClaims } = await auth();
+  const businessId = sessionClaims?.publicMetadata?.businessId as
+    | string
+    | undefined;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${TOKEN}`,
     ...(businessId ? { "X-Business-Id": businessId } : {}),
-    ...(fetchOptions.headers as Record<string, string>),
+    ...(options.headers as Record<string, string>),
   };
 
   const res = await fetch(`${API_URL}${path}`, {
-    ...fetchOptions,
+    ...options,
     headers,
     cache: "no-store",
   });
@@ -35,8 +39,8 @@ export async function apiServer<T>(
   return res.json() as Promise<T>;
 }
 
-// Client-side: calls the Next.js proxy (which adds the token server-side)
-// Use this in Client Components
+// Client-side: calls the Next.js proxy (which adds the token + businessId
+// server-side via the route handler). Use this in Client Components.
 export async function apiClient<T>(
   path: string,
   options: RequestInit = {},
