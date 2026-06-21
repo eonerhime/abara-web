@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
 export async function POST(req: NextRequest) {
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
 
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const businessId = sessionClaims?.publicMetadata?.businessId;
+  const client = await clerkClient();
+
+  // Fetch the live user object instead of relying on sessionClaims,
+  // since publicMetadata can lag behind the session JWT (e.g. right
+  // after signup, before the Clerk webhook has finished running).
+  const liveUser = await client.users.getUser(userId);
+  const businessId = liveUser.publicMetadata?.businessId as string | undefined;
+
   if (!businessId) {
     return NextResponse.json(
       { error: "No business associated with this user yet." },
@@ -33,7 +40,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 1. Sync to abara-api businesses record
   const apiRes = await fetch(
     `${process.env.INTERNAL_API_URL}/v1/internal/businesses/${businessId}`,
     {
@@ -54,8 +60,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2. Sync to Clerk user + mark profileComplete in publicMetadata
-  const client = await clerkClient();
   await client.users.updateUser(userId, {
     firstName: adminFirstName,
     lastName: adminLastName,
@@ -63,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   await client.users.updateUserMetadata(userId, {
     publicMetadata: {
-      ...(sessionClaims?.publicMetadata ?? {}),
+      ...liveUser.publicMetadata,
       profileComplete: true,
     },
   });
