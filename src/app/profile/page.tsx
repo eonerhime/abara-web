@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useUser, useSession } from "@clerk/nextjs";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { user } = useUser();
+  const { session } = useSession();
   const [adminFirstName, setAdminFirstName] = useState("");
   const [adminLastName, setAdminLastName] = useState("");
   const [phone, setPhone] = useState<string | undefined>(undefined);
@@ -16,8 +19,6 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // IP-based geolocation to default the country code.
-  // Falls back to NG silently if the lookup fails or is rate-limited.
   useEffect(() => {
     let cancelled = false;
     fetch("https://ipapi.co/json/")
@@ -27,9 +28,7 @@ export default function ProfilePage() {
           setDefaultCountry(data.country_code);
         }
       })
-      .catch(() => {
-        // Silent fallback — NG stays as default
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -56,7 +55,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           adminFirstName: adminFirstName.trim(),
           adminLastName: adminLastName.trim(),
-          phone, // already in E.164 format, e.g. +2349060005429
+          phone,
         }),
       });
 
@@ -64,6 +63,12 @@ export default function ProfilePage() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to update profile.");
       }
+
+      // Force Clerk to refetch the user/session so the updated
+      // publicMetadata.profileComplete is reflected before middleware
+      // re-checks it on the next navigation.
+      await user?.reload();
+      await session?.reload();
 
       router.push("/onboarding");
     } catch (err) {

@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { ApiError } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL!;
-const TOKEN = process.env.ABARA_INTERNAL_TOKEN!;
+const API_URL = process.env.INTERNAL_API_URL!;
+const TOKEN = process.env.INTERNAL_SERVICE_TOKEN!;
 
 // Server-side only: direct call to abara-api with internal token.
 // Use this in Server Components, Server Actions, and Route Handlers ONLY.
