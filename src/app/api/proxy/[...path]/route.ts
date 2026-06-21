@@ -1,56 +1,69 @@
+import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 const TOKEN = process.env.ABARA_INTERNAL_TOKEN!;
 
-async function handler(
+export async function GET(
   req: NextRequest,
-  { params }: { params: { path: string[] } },
+  { params }: { params: Promise<{ path: string[] }> },
 ) {
-  const session = await getServerSession(authOptions);
+  return proxyRequest(req, await params);
+}
 
-  if (!session) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxyRequest(req, await params);
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxyRequest(req, await params);
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return proxyRequest(req, await params);
+}
+
+async function proxyRequest(req: NextRequest, params: { path: string[] }) {
+  const { userId, sessionClaims } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const businessId = sessionClaims?.publicMetadata?.businessId as
+    | string
+    | undefined;
+
   const path = params.path.join("/");
-  const url = new URL(req.url);
-  const queryString = url.search;
+  const url = new URL(`${API_URL}/${path}`);
+  req.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${TOKEN}`,
-    "X-Business-Id": session.user.businessId,
+    ...(businessId ? { "X-Business-Id": businessId } : {}),
   };
 
-  const fetchOptions: RequestInit = {
+  const body =
+    req.method !== "GET" && req.method !== "DELETE"
+      ? await req.text()
+      : undefined;
+
+  const res = await fetch(url.toString(), {
     method: req.method,
     headers,
+    body,
     cache: "no-store",
-  };
+  });
 
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    const body = await req.text();
-    if (body) fetchOptions.body = body;
-  }
-
-  try {
-    const res = await fetch(
-      `${API_URL}/internal/${path}${queryString}`,
-      fetchOptions,
-    );
-
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ error: "Proxy error" }, { status: 502 });
-  }
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data, { status: res.status });
 }
-
-export const GET = handler;
-export const POST = handler;
-export const PUT = handler;
-export const PATCH = handler;
-export const DELETE = handler;

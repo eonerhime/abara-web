@@ -1,53 +1,63 @@
-import { withAuth } from "next-auth/middleware";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-export default withAuth(
-  function middleware(req) {
-    const token = req.nextauth.token;
-    const { pathname } = req.nextUrl;
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/login(.*)",
+  "/signup(.*)",
+  "/api/webhooks(.*)",
+]);
 
-    // Authenticated users hitting auth pages → redirect to dashboard
+const isProfileRoute = createRouteMatcher(["/profile(.*)"]);
+const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
+const isApiRoute = createRouteMatcher(["/api(.*)"]); // NEW
+
+export default clerkMiddleware(async (auth, req) => {
+  const { userId, sessionClaims } = await auth();
+
+  if (isPublicRoute(req)) {
     if (
-      token &&
-      (pathname.startsWith("/login") || pathname.startsWith("/signup"))
+      userId &&
+      (req.nextUrl.pathname.startsWith("/login") ||
+        req.nextUrl.pathname.startsWith("/signup"))
     ) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
-
-    // Authenticated but onboarding incomplete → redirect to onboarding
-    if (
-      token &&
-      !token.phoneNumberId &&
-      !pathname.startsWith("/onboarding") &&
-      !pathname.startsWith("/api")
-    ) {
-      return NextResponse.redirect(new URL("/onboarding", req.url));
-    }
-
     return NextResponse.next();
-  },
-  {
-    callbacks: {
-      authorized: ({ token, req }) => {
-        const { pathname } = req.nextUrl;
-        // Allow public paths without auth
-        if (
-          pathname.startsWith("/login") ||
-          pathname.startsWith("/signup") ||
-          pathname.startsWith("/api/auth") ||
-          pathname === "/"
-        ) {
-          return true;
-        }
-        // All other paths require auth
-        return !!token;
-      },
-    },
-  },
-);
+  }
+
+  if (!userId) {
+    // API routes should get a 401, not an HTML redirect
+    if (isApiRoute(req)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  // Let API routes handle their own auth/business logic —
+  // don't apply page-based onboarding gates to them.
+  if (isApiRoute(req)) {
+    return NextResponse.next();
+  }
+
+  const profileComplete =
+    sessionClaims?.publicMetadata?.profileComplete === true;
+  const phoneNumberId = sessionClaims?.publicMetadata?.phoneNumberId ?? null;
+
+  if (!profileComplete && !isProfileRoute(req)) {
+    return NextResponse.redirect(new URL("/profile", req.url));
+  }
+
+  if (profileComplete && !phoneNumberId && !isOnboardingRoute(req)) {
+    return NextResponse.redirect(new URL("/onboarding", req.url));
+  }
+
+  return NextResponse.next();
+});
 
 export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.ico|.*\\.webp).*)",
+    "/__clerk/:path*",
   ],
 };
