@@ -36,10 +36,10 @@ export async function POST(req: NextRequest) {
   let businessId: string | null = null;
   for (let i = 0; i < 3; i++) {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/internal/businesses/by-clerk-id/${clerkUserId}`,
+      `${process.env.INTERNAL_API_URL}/internal/businesses/by-clerk-id/${clerkUserId}`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.ABARA_INTERNAL_TOKEN}`,
+          Authorization: `Bearer ${process.env.INTERNAL_SERVICE_TOKEN}`,
         },
       },
     );
