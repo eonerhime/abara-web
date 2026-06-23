@@ -6,6 +6,7 @@ import type { Business, Transaction, InventoryItem } from "@/types";
 
 export default async function DashboardPage() {
   const { userId, sessionClaims } = await auth();
+
   if (!userId) return redirect("/login");
 
   const pm = sessionClaims?.publicMetadata as

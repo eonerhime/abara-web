@@ -5,18 +5,71 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Format kobo to Naira display string e.g. 2500000 → "₦25,000.00"
-export function formatNaira(kobo: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 2,
-  }).format((kobo ?? 0) / 100);
+// Maps currency code to a sensible display locale. Extend as you add countries.
+const CURRENCY_LOCALES: Record<string, string> = {
+  NGN: "en-NG",
+  USD: "en-US",
+  GBP: "en-GB",
+  GHS: "en-GH",
+  KES: "en-KE",
+  ZAR: "en-ZA",
+};
+
+function localeForCurrency(currencyCode: string): string {
+  return CURRENCY_LOCALES[currencyCode] ?? "en-US";
 }
 
-export function formatDate(iso: string): string {
+// Most currencies store minor units (kobo, cents) at 2 decimal places,
+// but not all (e.g. JPY has 0). Ask Intl rather than hardcoding /100 everywhere.
+function minorUnitDigits(currencyCode: string): number {
   try {
-    return new Date(iso).toLocaleDateString("en-NG", {
+    return (
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currencyCode,
+      }).resolvedOptions().maximumFractionDigits ?? 2
+    );
+  } catch {
+    return 2;
+  }
+}
+
+/**
+ * Format an amount stored in minor units (kobo, cents, etc.) as a
+ * locale-appropriate currency string. Defaults to NGN for back-compat.
+ */
+export function formatCurrency(
+  minorUnits: number,
+  currencyCode: string = "NGN",
+): string {
+  const digits = minorUnitDigits(currencyCode);
+  const divisor = Math.pow(10, digits);
+  const locale = localeForCurrency(currencyCode);
+
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: currencyCode,
+      minimumFractionDigits: digits,
+    }).format((minorUnits ?? 0) / divisor);
+  } catch {
+    // Unknown/invalid currency code — fall back rather than crash the UI
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format((minorUnits ?? 0) / 100);
+  }
+}
+
+/** @deprecated Use formatCurrency(value, "NGN") — kept for any call sites not yet migrated. */
+export function formatNaira(kobo: number): string {
+  return formatCurrency(kobo, "NGN");
+}
+
+export function formatDate(iso: string, currencyCode?: string): string {
+  const locale = currencyCode ? localeForCurrency(currencyCode) : "en-NG";
+  try {
+    return new Date(iso).toLocaleDateString(locale, {
       year: "numeric",
       month: "short",
       day: "numeric",
