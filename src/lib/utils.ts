@@ -1,3 +1,5 @@
+// src/lib/utils.ts
+
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -77,4 +79,12 @@ export function formatDate(iso: string, currencyCode?: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * Truncates a string to a specified length and appends an ellipsis if it exceeds that length.
+ */
+export function truncate(str: string, maxLength: number): string {
+  if (!str) return "";
+  return str.length > maxLength ? `${str.slice(0, maxLength)}...` : str;
 }

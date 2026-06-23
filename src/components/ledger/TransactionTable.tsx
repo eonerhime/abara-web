@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -16,81 +16,86 @@ interface Props {
 }
 
 export function TransactionTable({ transactions }: Props) {
-  const columns: ColumnDef<Transaction>[] = [
-    {
-      accessorKey: "createdAt",
-      header: "Date",
-      cell: ({ getValue }) => (
-        <span className="text-sm text-gray-600 whitespace-nowrap">
-          {formatDate(getValue() as string)}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "type",
-      header: "Type",
-      cell: ({ getValue }) => {
-        const type = getValue() as string;
-        return (
-          <Badge
-            className={
-              type === "income"
-                ? "bg-green-100 text-green-700 text-xs"
-                : "bg-red-100 text-red-700 text-xs"
-            }
-          >
-            {type === "income" ? "Income" : "Expense"}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "amount",
-      header: "Amount",
-      cell: ({ row }) => {
-        const type = row.original.type;
-        const amount = row.original.amount;
-        return (
-          <span
-            className={`text-sm font-semibold tabular-nums ${
-              type === "income" ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {type === "expense" ? "−" : "+"}
-            {formatNaira(amount)}
+  // Fixed: Added the array bracket [] to the ColumnDef type argument
+  const columns = useMemo<ColumnDef<Transaction>[]>(
+    () => [
+      {
+        accessorKey: "createdAt",
+        header: "Date",
+        cell: ({ getValue }) => (
+          <span className="text-sm text-gray-600 whitespace-nowrap">
+            {formatDate(getValue() as string)}
           </span>
-        );
+        ),
       },
-    },
-    {
-      accessorKey: "description",
-      header: "Description",
-      cell: ({ getValue }) => (
-        <span className="text-sm text-gray-700">
-          {truncate(getValue() as string, 45)}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "category",
-      header: "Category",
-      cell: ({ getValue }) => (
-        <span className="text-xs text-gray-500 capitalize">
-          {(getValue() as string) ?? "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "reference",
-      header: "Ref",
-      cell: ({ getValue }) => (
-        <span className="text-xs font-mono text-gray-400">
-          {getValue() as string}
-        </span>
-      ),
-    },
-  ];
+      {
+        accessorKey: "type",
+        header: "Type",
+        cell: ({ getValue }) => {
+          const type = getValue() as string;
+          return (
+            <Badge
+              className={
+                type === "income"
+                  ? "bg-green-100 text-green-700 text-xs"
+                  : "bg-red-100 text-red-700 text-xs"
+              }
+            >
+              {type === "income" ? "Income" : "Expense"}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "amount",
+        header: "Amount",
+        cell: ({ row }) => {
+          const type = row.original.type;
+          const amount = row.original.amount;
+          return (
+            <span
+              className={`text-sm font-semibold tabular-nums ${
+                type === "income" ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {type === "expense" ? "−" : "+"}
+              {formatNaira(amount)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        cell: ({ getValue }) => (
+          <span className="text-sm text-gray-700">
+            {truncate(getValue() as string, 45)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "category",
+        header: "Category",
+        cell: ({ getValue }) => (
+          <span className="text-xs text-gray-500 capitalize">
+            {(getValue() as string) ?? "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "reference",
+        header: "Ref",
+        cell: ({ getValue }) => (
+          <span className="text-xs font-mono text-gray-400">
+            {getValue() as string}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: transactions,
     columns,

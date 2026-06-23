@@ -52,12 +52,15 @@ export function RevenueChart({ data, currencyCode }: Props) {
 
   const formatTooltipValue = (
     value: number | string | readonly (string | number)[] | undefined,
-    name: string,
+    name: string | number | undefined, // Fixed: Allowed string | number | undefined
   ): [string, string] => {
     const numeric = typeof value === "number" ? value : 0;
+    // Cast name to string safely to check its value
+    const nameStr = String(name);
+
     return [
       formatCurrency(numeric, currencyCode),
-      name === "income" ? "Income" : "Expenses",
+      nameStr === "income" ? "Income" : "Expenses",
     ];
   };
 

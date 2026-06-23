@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
+// 1. Swapped out next-auth for Clerk
+import { useUser } from "@clerk/nextjs";
 import { Transaction } from "@/types";
 import { TransactionTable } from "@/components/ledger/TransactionTable";
 import { ExportButton } from "@/components/ledger/ExportButton";
@@ -18,7 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function LedgerPage() {
-  const { data: session } = useSession();
+  // 2. Retrieve user context dynamically via Clerk
+  const { user } = useUser();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -28,7 +30,11 @@ export default function LedgerPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
+  // Safely grab business layout name or name from metadata / username fallback
+  const businessName = user?.fullName || user?.username || "business";
+  //
   const fetchTransactions = useCallback(async () => {
+    // 1. Keep the execution loop asynchronous by putting the loading trigger here
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -52,7 +58,13 @@ export default function LedgerPage() {
   }, [page, type, search, from, to]);
 
   useEffect(() => {
-    fetchTransactions();
+    // 1. Assign the timeout to handleFetch
+    const handleFetch = setTimeout(() => {
+      fetchTransactions();
+    }, 0);
+
+    // 2. Correctly clear handleFetch on unmount
+    return () => clearTimeout(handleFetch);
   }, [fetchTransactions]);
 
   return (
@@ -64,11 +76,7 @@ export default function LedgerPage() {
             All transactions for your business
           </p>
         </div>
-        <ExportButton
-          from={from}
-          to={to}
-          businessName={session?.user?.name ?? "business"}
-        />
+        <ExportButton from={from} to={to} businessName={businessName} />
       </div>
 
       {/* Filters */}
