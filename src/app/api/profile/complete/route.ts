@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
+async function getBusinessIdWithRetry(
+  client: Awaited<ReturnType<typeof clerkClient>>,
+  userId: string,
+): Promise<{
+  businessId: string | undefined;
+  liveUser: Awaited<ReturnType<typeof client.users.getUser>>;
+}> {
+  let liveUser = await client.users.getUser(userId);
+  let businessId = liveUser.publicMetadata?.businessId as string | undefined;
+
+  for (let i = 0; i < 5 && !businessId; i++) {
+    await new Promise((r) => setTimeout(r, 800));
+    liveUser = await client.users.getUser(userId);
+    businessId = liveUser.publicMetadata?.businessId as string | undefined;
+  }
+
+  return { businessId, liveUser };
+}
+
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
 
@@ -10,11 +29,12 @@ export async function POST(req: NextRequest) {
 
   const client = await clerkClient();
 
-  // Fetch the live user object instead of relying on sessionClaims,
-  // since publicMetadata can lag behind the session JWT (e.g. right
-  // after signup, before the Clerk webhook has finished running).
-  const liveUser = await client.users.getUser(userId);
-  const businessId = liveUser.publicMetadata?.businessId as string | undefined;
+  // Fetch the live user object with a short retry, since publicMetadata
+  // can lag behind by a few seconds right after signup (webhook chain:
+  // create business -> sync metadata). The client already polls
+  // /api/profile/status before showing this form, but this retry is a
+  // backstop for edge cases (stale form state, slightly-early poll, etc.)
+  const { businessId, liveUser } = await getBusinessIdWithRetry(client, userId);
 
   if (!businessId) {
     return NextResponse.json(
