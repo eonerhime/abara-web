@@ -1,18 +1,21 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { apiServer } from "@/lib/api";
 import { formatNaira, formatDate } from "@/lib/utils";
 import type { Business, Transaction, InventoryItem } from "@/types";
 
 export default async function DashboardPage() {
-  const { userId, sessionClaims } = await auth();
+  const { userId } = await auth();
 
   if (!userId) return redirect("/login");
 
-  const pm = sessionClaims?.publicMetadata as
-    | { businessId?: string }
-    | undefined;
-  const businessId = pm?.businessId as string | undefined;
+  // Use a live lookup instead of sessionClaims.publicMetadata, since the
+  // JWT can lag behind a few seconds after signup/profile-complete
+  // (Clerk webhook chain: create business -> sync metadata). Matches
+  // the same fix applied in /api/profile/complete.
+  const client = await clerkClient();
+  const liveUser = await client.users.getUser(userId);
+  const businessId = liveUser.publicMetadata?.businessId as string | undefined;
 
   if (!businessId) return redirect("/profile");
 
@@ -110,6 +113,7 @@ export default async function DashboardPage() {
           >
             Connect WhatsApp
           </a>
+
           <a
             href="/inventory"
             className="inline-block px-4 py-2 border rounded"

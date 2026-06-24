@@ -19,6 +19,39 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Gate: don't let the user fill out the form until the business
+  // row + publicMetadata.businessId actually exist. Right after signup,
+  // the Clerk webhook chain (create business -> sync metadata) can take
+  // a few seconds, and users often submit faster than that completes.
+  const [businessReady, setBusinessReady] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const poll = async () => {
+      for (let i = 0; i < 10; i++) {
+        try {
+          const res = await fetch("/api/profile/status");
+          const data = await res.json();
+          if (data.ready) {
+            if (!cancelled) setBusinessReady(true);
+            return;
+          }
+        } catch {
+          // ignore transient errors, keep polling
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      if (!cancelled) setCheckFailed(true);
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetch("https://ipapi.co/json/")
@@ -64,9 +97,6 @@ export default function ProfilePage() {
         throw new Error(body.error || "Failed to update profile.");
       }
 
-      // Force Clerk to refetch the user/session so the updated
-      // publicMetadata.profileComplete is reflected before middleware
-      // re-checks it on the next navigation.
       await user?.reload();
       await session?.reload();
 
@@ -76,6 +106,37 @@ export default function ProfilePage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (checkFailed) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-8 sm:py-12">
+        <h1 className="text-2xl font-semibold mb-4">Almost there</h1>
+        <p className="text-sm text-gray-600 mb-4">
+          We&apos;re still setting up your account. This is taking longer than
+          expected — try refreshing the page in a moment.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="w-full rounded bg-black text-white py-2"
+        >
+          Refresh
+        </button>
+      </div>
+    );
+  }
+
+  if (!businessReady) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-8 sm:py-12">
+        <h1 className="text-2xl font-semibold mb-4">
+          Setting up your account…
+        </h1>
+        <p className="text-sm text-gray-500">
+          This usually takes a few seconds.
+        </p>
+      </div>
+    );
   }
 
   return (
