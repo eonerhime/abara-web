@@ -52,8 +52,11 @@ export async function POST(req: NextRequest) {
       );
       if (res.ok) {
         const data = await res.json();
-        businessId = data.businessId;
-        break;
+        if (data.businessId) {
+          businessId = data.businessId;
+          break;
+        }
+        // 200 but no businessId yet — business not created, keep retrying
       }
     } catch {
       // network error during cold start (e.g. connection refused) — keep retrying
