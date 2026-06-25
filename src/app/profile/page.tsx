@@ -22,7 +22,9 @@ export default function ProfilePage() {
   // Gate: don't let the user fill out the form until the business
   // row + publicMetadata.businessId actually exist. Right after signup,
   // the Clerk webhook chain (create business -> sync metadata) can take
-  // a few seconds, and users often submit faster than that completes.
+  // up to ~70s in the worst case (clerk-synced's own internal retry
+  // loop against abara-api, which can be cold-starting on Render's
+  // free tier), so this poll window must comfortably exceed that.
   const [businessReady, setBusinessReady] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
 
@@ -30,7 +32,9 @@ export default function ProfilePage() {
     let cancelled = false;
 
     const poll = async () => {
-      for (let i = 0; i < 10; i++) {
+      // 40 attempts x 2s = 80s budget — safely exceeds clerk-synced's
+      // worst-case ~70s retry+patch chain.
+      for (let i = 0; i < 40; i++) {
         try {
           const res = await fetch("/api/profile/status");
           const data = await res.json();
@@ -41,7 +45,7 @@ export default function ProfilePage() {
         } catch {
           // ignore transient errors, keep polling
         }
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
       if (!cancelled) setCheckFailed(true);
     };
