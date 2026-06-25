@@ -32,23 +32,36 @@ export async function POST(req: NextRequest) {
   const clerkUserId = event.data.id;
 
   // abara-api's own webhook handler creates the business row first.
-  // Small delay/retry to avoid racing it — 3 attempts, 500ms apart.
+  // Retry with backoff to survive Render cold starts, which can take
+  // 30-60s on free/starter tier when the service has been idle.
+  // Total window: ~70s, well within Vercel's 5-minute function limit.
   let businessId: string | null = null;
-  for (let i = 0; i < 3; i++) {
-    const res = await fetch(
-      `${process.env.INTERNAL_API_URL}/internal/businesses/by-clerk-id/${clerkUserId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.INTERNAL_SERVICE_TOKEN}`,
+  const delays = [
+    500, 1000, 2000, 3000, 5000, 8000, 10000, 10000, 10000, 10000,
+  ];
+
+  for (let i = 0; i < delays.length; i++) {
+    try {
+      const res = await fetch(
+        `${process.env.INTERNAL_API_URL}/internal/businesses/by-clerk-id/${clerkUserId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.INTERNAL_SERVICE_TOKEN}`,
+          },
         },
-      },
-    );
-    if (res.ok) {
-      const data = await res.json();
-      businessId = data.businessId;
-      break;
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.businessId) {
+          businessId = data.businessId;
+          break;
+        }
+        // 200 but no businessId yet — business not created, keep retrying
+      }
+    } catch {
+      // network error during cold start (e.g. connection refused) — keep retrying
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, delays[i]));
   }
 
   if (!businessId) {
