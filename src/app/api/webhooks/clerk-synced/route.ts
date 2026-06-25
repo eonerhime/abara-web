@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   // abara-api's own webhook handler creates the business row first.
   // Retry with backoff to survive Render cold starts, which can take
   // 30-60s on free/starter tier when the service has been idle.
-  // Total window: ~70s, well within Vercel's 5-minute function limit.
+  // Total window: ~70s, well within Vercel's 5-minute function budget.
   let businessId: string | null = null;
   const delays = [
     500, 1000, 2000, 3000, 5000, 8000, 10000, 10000, 10000, 10000,
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < delays.length; i++) {
     try {
       const res = await fetch(
-        `${process.env.INTERNAL_API_URL}/internal/businesses/by-clerk-id/${clerkUserId}`,
+        `${process.env.INTERNAL_API_URL}/v1/internal/businesses/by-clerk-id/${clerkUserId}`,
         {
           headers: {
             Authorization: `Bearer ${process.env.INTERNAL_SERVICE_TOKEN}`,
